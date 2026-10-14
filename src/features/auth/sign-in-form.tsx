@@ -5,11 +5,11 @@ import { useActionState } from "react";
 import { Alert } from "@/components/ui/states";
 import { Field, Input } from "@/components/ui/form";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { signInAction } from "@/features/auth/actions";
 import {
   INITIAL_SIGN_IN_STATE,
-  signInAction,
   type SignInState,
-} from "@/features/auth/actions";
+} from "@/features/auth/state";
 
 export function SignInForm({ next }: { next?: string }) {
   const [state, formAction] = useActionState<SignInState, FormData>(

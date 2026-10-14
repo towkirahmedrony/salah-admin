@@ -6,25 +6,22 @@ import { z } from "zod";
 import { readSupabaseEnv } from "@/lib/env";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { toAppError } from "@/lib/errors";
-
-export interface SignInState {
-  status: "idle" | "error";
-  message: string;
-  fieldErrors?: Record<string, string[]>;
-}
-
-export const INITIAL_SIGN_IN_STATE: SignInState = { status: "idle", message: "" };
+import type { SignInState } from "@/features/auth/state";
 
 const signInSchema = z.object({
-  email: z.string().trim().min(1, "Enter your email address.").email("Enter a valid email address."),
+  email: z
+    .string()
+    .trim()
+    .min(1, "Enter your email address.")
+    .email("Enter a valid email address."),
   password: z.string().min(1, "Enter your password."),
   next: z
     .string()
     .trim()
     .optional()
-    // Only same-site relative paths, so a crafted ?next= cannot become an
-    // open redirect that makes a phishing page look like this panel.
-    .transform((value) => (value && /^\/[^/\\]/.test(value) ? value : undefined)),
+    .transform((value) =>
+      value && /^\/[^/\\]/.test(value) ? value : undefined,
+    ),
 });
 
 export async function signInAction(
@@ -41,18 +38,26 @@ export async function signInAction(
     return {
       status: "error",
       message: "Please correct the highlighted fields.",
-      fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
+      fieldErrors: parsed.error.flatten().fieldErrors as Record<
+        string,
+        string[]
+      >,
     };
   }
 
   const env = readSupabaseEnv();
+
   if (!env.ok) {
     return { status: "error", message: env.reason };
   }
 
   const supabase = await getServerSupabase();
+
   if (!supabase) {
-    return { status: "error", message: "The database client could not be created." };
+    return {
+      status: "error",
+      message: "The database client could not be created.",
+    };
   }
 
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -61,30 +66,25 @@ export async function signInAction(
   });
 
   if (error || !data.user) {
-    // Deliberately identical for an unknown address and a wrong password: the
-    // sign-in form must not become a way to enumerate administrator accounts.
-    const appError = error?.message?.toLowerCase().includes("email not confirmed")
-      ? {
-          status: "error" as const,
-          message:
-            "This account has not been confirmed yet. Confirm the address in Supabase Auth, then sign in.",
-        }
-      : {
-          status: "error" as const,
-          message: "Email or password is incorrect.",
-        };
+    if (error?.message?.toLowerCase().includes("email not confirmed")) {
+      return {
+        status: "error",
+        message:
+          "This account has not been confirmed yet. Confirm the address in Supabase Auth, then sign in.",
+      };
+    }
 
-    if (error && !/invalid login credentials|email not confirmed/i.test(error.message)) {
+    if (error && !/invalid login credentials/i.test(error.message)) {
       const mapped = toAppError(error);
       return { status: "error", message: mapped.message };
     }
 
-    return appError;
+    return {
+      status: "error",
+      message: "Email or password is incorrect.",
+    };
   }
 
-  // A session proves identity, not authorization. If this user has no active
-  // roster row, the session is discarded immediately rather than being left to
-  // be rejected page by page.
   const { data: adminRow, error: adminError } = await supabase
     .from("admin_users")
     .select("id, is_active")
@@ -93,7 +93,9 @@ export async function signInAction(
 
   if (adminError) {
     await supabase.auth.signOut();
+
     const mapped = toAppError(adminError);
+
     return {
       status: "error",
       message:
@@ -105,6 +107,7 @@ export async function signInAction(
 
   if (!adminRow || !adminRow.is_active) {
     await supabase.auth.signOut();
+
     return {
       status: "error",
       message:
