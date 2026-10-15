@@ -28,6 +28,22 @@ export function formatDateTime(
   }).format(date);
 }
 
+/**
+ * Today's date in the panel's working timezone, as `YYYY-MM-DD`.
+ *
+ * Uses the same timezone `formatDate` and `formatDateTime` render in, so a date
+ * default in a form and a date shown in a list cannot disagree about which day it
+ * is near midnight.
+ */
+export function todayInDisplayTimezone(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: DISPLAY_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const date = typeof value === "string" ? new Date(`${String(value).slice(0, 10)}T00:00:00Z`) : value;

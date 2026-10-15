@@ -137,30 +137,50 @@ export function Checkbox({ label, help, className, id, ...props }: CheckboxProps
   );
 }
 
-/** Grouped section inside a long form, so it stays navigable on a phone. */
+/**
+ * Grouped section inside a long form, so it stays navigable on a phone.
+ *
+ * `title` is optional. When it is given the group is a `<fieldset>` with a
+ * `<legend>`, which is what a screen reader needs in order to announce which group
+ * a field belongs to. When it is omitted — because the group sits inside a
+ * `SectionCard` that already has a visible heading — no fieldset is rendered at
+ * all, rather than an unlabelled one whose legend would be empty.
+ */
 export function FieldGroup({
   title,
   description,
   columns = 1,
   children,
 }: {
-  title: string;
+  title?: string;
   description?: ReactNode;
   columns?: 1 | 2;
   children: ReactNode;
 }) {
+  const grid = (
+    <div
+      className={cn("grid gap-4", columns === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1")}
+    >
+      {children}
+    </div>
+  );
+
+  if (!title) {
+    return (
+      <div className="min-w-0">
+        {description ? (
+          <p className="mb-3 text-xs leading-relaxed text-ink-500">{description}</p>
+        ) : null}
+        {grid}
+      </div>
+    );
+  }
+
   return (
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="mb-1 text-sm font-semibold text-ink-900">{title}</legend>
       {description ? <p className="mb-3 text-xs leading-relaxed text-ink-500">{description}</p> : null}
-      <div
-        className={cn(
-          "grid gap-4",
-          columns === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1",
-        )}
-      >
-        {children}
-      </div>
+      {grid}
     </fieldset>
   );
 }

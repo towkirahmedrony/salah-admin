@@ -26,6 +26,7 @@ management pages are not.
 | Districts | Same, plus parent (division) filtering |
 | Thanas / Upazilas | Same, plus coordinates and cascading division → district selects |
 | Localities | Same, plus verification status, provenance and explicit parent handling |
+| Prayer configuration | List, create/edit form, version history, publish/archive/delete lifecycle, validation and precedence preview. Drafts, review, effective dates and the public read contract are enforced in SQL. See `docs/PRAYER_CONFIGURATION.md`. |
 | Audit history | Schema, triggers, RLS and dashboard summary. **The full log page is not built.** |
 | Setup / configuration states | `/setup` reports exactly which step is outstanding |
 
@@ -34,7 +35,6 @@ management pages are not.
 Opening these sections shows an explicit "not implemented yet" page rather than a
 404:
 
-- Prayer configuration (`prayer_calculation_configs`)
 - Verified timetables (`verified_prayer_timings`)
 - Ramadan calendar (`ramadan_calendar_versions`, `ramadan_calendar_days`)
 - App configuration (`app_configs`)
@@ -114,6 +114,8 @@ order.
 | `20260101000500_publish_review_guards.sql` | Publish/review constraints, lockout protection |
 | `20260101000600_public_endpoints.sql` | Anonymous feedback intake, public read contracts |
 | `20260101000700_admin_bootstrap.sql` | First-admin promotion, in-panel provisioning |
+| `20260101000800_prayer_config_contract.sql` | Prayer configuration contract: method enum, division/district scopes, per-prayer adjustments, derived angles, immutability and draft-only-delete guards |
+| `20260101000900_prayer_config_functions_and_policies.sql` | Atomic publish/archive, precedence resolution, the public read contract, and the split insert/update/delete policies |
 
 ### Reference data (optional)
 
@@ -177,6 +179,14 @@ The design assumption is that **the browser is hostile**.
 - **Publishing always records who and when.** A `BEFORE UPDATE` trigger stamps
   publisher and reviewer identity, and `CHECK` constraints make a published
   record without a reviewer impossible.
+- **Prayer configuration cannot be published by a direct write.** Its policies are
+  split by command rather than declared `for all`, and none of them permits
+  `status = 'published'` through `WITH CHECK`. The only way to reach the published
+  state is `public.publish_prayer_config()`, which re-checks the capability inside
+  the function and archives the incumbent configuration in the same transaction, so
+  a scope can never hold zero or two live configurations. A published or archived
+  configuration is then immutable: editing one is refused by a trigger, and so is
+  deleting anything that is not a draft.
 - **`app_configs` cannot hold secrets.** A key matching
   `secret|token|password|credential|api_key|…` is rejected by a `CHECK`
   constraint, not merely discouraged in the UI.
@@ -192,6 +202,35 @@ The design assumption is that **the browser is hostile**.
   will appear here if it reaches a managed table.
 - **`request_id` depends on PostgREST's `request.headers` setting.** Where it is
   unavailable the column is `null`; the audit row is still written.
+- **The Android app does not read published configurations yet.** It has no network
+  client in its current phase, so publishing changes nothing on any device. The
+  panel implements the publish and read contract and does **not** claim the app is
+  using a newly published configuration — there is no acknowledgement channel, so
+  there is nothing to claim. The remaining app-side work is listed in
+  `docs/PRAYER_CONFIGURATION.md` section 7.3.
+- **Locality-level overrides are not implemented.** The app's stored locality
+  reference carries a name and a district but no stable identifier, so it could never
+  be matched to a `localities` row. Supported scopes are global, division, district
+  and thana.
+- **The migrations in this repository have not been executed against a live
+  PostgreSQL instance.** No database was available in the environment this was
+  built in. What *has* been done is a syntax check against the real PostgreSQL
+  grammar, including the procedural bodies:
+
+  ```bash
+  pip install pglast
+  python3 scripts/verify-migrations.py
+  ```
+
+  That currently reports `10 files, 246 statements, 44 procedural bodies parsed`
+  with no failures, plus one body in `20260101000300` that the parser cannot
+  resolve without a catalog (a variable typed with a schema-qualified enum in a
+  multi-column `SELECT … INTO`) and names rather than silently skipping.
+
+  Syntax is not behaviour. Apply the migrations to a scratch project and confirm
+  that `publish_prayer_config()` archives its predecessor, that a direct write
+  cannot set `status = 'published'`, and that `anon` reads only published rows,
+  before trusting any of it in production.
 
 ---
 
@@ -216,8 +255,20 @@ working.
 
 ### What the tests cover
 
-32 unit tests over the rules where a silent bug is expensive:
+73 unit tests over the rules where a silent bug is expensive:
 
+- The prayer calculation method set, checked against the Android engine's own enum,
+  together with the angles the engine ships for each method and the rule that Isha is
+  either an angle or an interval and never both
+- Scope validation: locality is refused because the app cannot resolve one, an
+  override cannot be saved without its target, and a target cannot disagree with the
+  scope
+- Per-prayer adjustments clamped to the engine's own ±60-minute limit
+- Publishing blocked by a missing method, source, effective-from date, location
+  target, unknown engine, unknown engine version or invalid timezone — and warned
+  about, but not blocked, by a configuration whose effective period has already
+  ended or has not yet started
+- Payload schema version: a newer version is rejected rather than partially applied
 - Timetable chronology, including that unusual-but-possible sources produce
   warnings rather than false rejections
 - Ramadan validation: 29/30-day length, gaps, duplicates, time order, and that
@@ -254,6 +305,16 @@ The panel never invents data.
 - The panel does **not** compute prayer times. The Android app has its own
   offline Adhan engine; the panel publishes parameters it already understands,
   and refuses to publish for an engine version the app does not ship.
+- The panel stores a calculation **method identity**, never a hand-typed Fajr or
+  Isha angle. The engine derives its own angles from the method and has no API for
+  an arbitrary one, so the stored angles are a derived mirror of the engine's
+  constants, written by a trigger so they cannot disagree with what the app will
+  actually compute. Offering an editable angle would have produced a configuration
+  that looked right and did nothing.
+- A setting is offered only when the engine reads it. Sunrise and sunset options are
+  absent because the provider computes those as raw astronomical events, and
+  `locality` scope is absent because the app has no stable identifier for a
+  neighbourhood. Scopes are global, division, district and thana.
 
 ---
 

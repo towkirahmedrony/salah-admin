@@ -34,10 +34,47 @@ export type AdminRole =
 
 export type RecordStatus = "draft" | "published" | "archived";
 export type VerificationStatus = "unverified" | "verified" | "rejected";
-export type PrayerConfigScope = "global" | "thana";
+
+/**
+ * Scopes a prayer configuration may target.
+ *
+ * `locality` is deliberately absent. The Android app's stored locality reference
+ * (`BangladeshLocalityRef`) carries a name, a district id and a kind — but no stable
+ * id, because its source is an OpenStreetMap neighbourhood layer. The app therefore
+ * cannot map its location to one of this panel's `localities.id` rows, and a locality
+ * override would silently never apply. See docs/PRAYER_CONFIGURATION.md section 3.
+ */
+export type PrayerConfigScope = "global" | "division" | "district" | "thana";
+
 export type AsrMadhhab = "shafi" | "hanafi";
+
+/**
+ * The calculation methods the Android engine ships, one-to-one with its
+ * `PrayerCalculationMethod` enum. The engine owns the angles; this side carries
+ * identity only.
+ */
+export type PrayerCalculationMethod =
+  | "karachi"
+  | "muslim_world_league"
+  | "egyptian"
+  | "umm_al_qura"
+  | "dubai"
+  | "moon_sighting_committee"
+  | "north_america"
+  | "kuwait"
+  | "qatar"
+  | "singapore"
+  | "turkey";
+
+/**
+ * High-latitude twilight bound, mirroring the engine's `HighLatitudeRule`.
+ *
+ * `automatic` is the engine's `null` rule: it applies the rule recommended for the
+ * latitude. There is no "off" — without some bound a summer Fajr or Isha is
+ * undefined.
+ */
 export type HighLatitudeRule =
-  | "none"
+  | "automatic"
   | "middle_of_the_night"
   | "seventh_of_the_night"
   | "twilight_angle";
@@ -146,15 +183,27 @@ export type PrayerCalculationConfigRow = {
   id: string;
   name: string;
   scope: PrayerConfigScope;
+  division_id: string | null;
+  district_id: string | null;
   thana_id: string | null;
+  schema_version: number;
   engine_key: string;
   engine_version: string;
-  calculation_method: string | null;
+  calculation_method: PrayerCalculationMethod | null;
+  /** Derived from `calculation_method` by the `derive_prayer_config_angles` trigger. */
   fajr_angle: number | null;
+  /** Derived. Mutually exclusive with `isha_interval_minutes`. */
   isha_angle: number | null;
+  /** Derived. Mutually exclusive with `isha_angle`. */
   isha_interval_minutes: number | null;
   asr_madhhab: AsrMadhhab;
   high_latitude_rule: HighLatitudeRule;
+  /** Per-prayer manual corrections in minutes, within +/-60. */
+  adjust_fajr: number;
+  adjust_dhuhr: number;
+  adjust_asr: number;
+  adjust_maghrib: number;
+  adjust_isha: number;
   timezone: string;
   effective_from: string | null;
   effective_to: string | null;
@@ -321,7 +370,12 @@ export type DivisionInsert = InsertShape<DivisionRow, "id" | "created_at" | "upd
 export type DistrictInsert = InsertShape<DistrictRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "is_active" | "name_bn">;
 export type ThanaInsert = InsertShape<ThanaRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "is_active" | "name_bn" | "latitude" | "longitude">;
 export type LocalityInsert = InsertShape<LocalityRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "is_active" | "name_bn" | "code" | "alternative_names" | "latitude" | "longitude" | "source_name" | "source_url" | "verification_status" | "notes" | "thana_id" | "district_id">;
-export type PrayerCalculationConfigInsert = InsertShape<PrayerCalculationConfigRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "status" | "version" | "reviewed_by" | "reviewed_at" | "published_by" | "published_at">;
+/**
+ * `fajr_angle`, `isha_angle` and `isha_interval_minutes` are omitted because the
+ * `derive_prayer_config_angles` trigger computes them from `calculation_method` on
+ * every write. Sending them would be sending a value the database overwrites.
+ */
+export type PrayerCalculationConfigInsert = InsertShape<PrayerCalculationConfigRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "status" | "version" | "reviewed_by" | "reviewed_at" | "published_by" | "published_at" | "fajr_angle" | "isha_angle" | "isha_interval_minutes">;
 export type VerifiedPrayerTimingInsert = InsertShape<VerifiedPrayerTimingRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "status" | "version" | "verified_by" | "verified_at" | "published_by" | "published_at">;
 export type RamadanCalendarVersionInsert = InsertShape<RamadanCalendarVersionRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "status" | "version" | "day_count" | "reviewed_by" | "reviewed_at" | "published_by" | "published_at">;
 export type RamadanCalendarDayInsert = InsertShape<RamadanCalendarDayRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by">;
@@ -414,6 +468,20 @@ export interface Database {
         Insert: PrayerCalculationConfigInsert;
         Update: TableUpdate<PrayerCalculationConfigRow>;
         Relationships: [
+          {
+            foreignKeyName: "prayer_calculation_configs_division_id_fkey";
+            columns: ["division_id"];
+            isOneToOne: false;
+            referencedRelation: "divisions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "prayer_calculation_configs_district_id_fkey";
+            columns: ["district_id"];
+            isOneToOne: false;
+            referencedRelation: "districts";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "prayer_calculation_configs_thana_id_fkey";
             columns: ["thana_id"];
@@ -542,6 +610,78 @@ export interface Database {
           expires_at: string | null;
         }[];
       };
+      /**
+       * The public read contract for the Android app. Published rows only, with the
+       * app-facing p-code and without internal notes or actor columns. See
+       * docs/PRAYER_CONFIGURATION.md section 7.
+       */
+      public_prayer_configs: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          name: string;
+          scope: PrayerConfigScope;
+          scope_code: string;
+          schema_version: number;
+          engine_key: string;
+          engine_version: string;
+          calculation_method: PrayerCalculationMethod;
+          fajr_angle: number | null;
+          isha_angle: number | null;
+          isha_interval_minutes: number | null;
+          asr_madhhab: AsrMadhhab;
+          high_latitude_rule: HighLatitudeRule;
+          adjust_fajr: number;
+          adjust_dhuhr: number;
+          adjust_asr: number;
+          adjust_maghrib: number;
+          adjust_isha: number;
+          timezone: string;
+          effective_from: string;
+          effective_to: string | null;
+          version: number;
+          published_at: string | null;
+          source_name: string | null;
+          source_url: string | null;
+        }[];
+      };
+      /**
+       * Archives the live configuration for the same scope target and publishes this
+       * one, in one transaction. Re-checks authorization internally.
+       */
+      publish_prayer_config: {
+        Args: { p_id: string };
+        Returns: PrayerCalculationConfigRow;
+      };
+      archive_prayer_config: {
+        Args: { p_id: string };
+        Returns: PrayerCalculationConfigRow;
+      };
+      /**
+       * Thana > district > division > global precedence for one location and date.
+       * Admin preview only — not granted to `anon`.
+       */
+      resolve_prayer_config: {
+        Args: {
+          p_division_id?: string | null;
+          p_district_id?: string | null;
+          p_thana_id?: string | null;
+          p_on_date?: string;
+        };
+        Returns: {
+          id: string;
+          name: string;
+          scope: PrayerConfigScope;
+          matched_by: string;
+          calculation_method: PrayerCalculationMethod | null;
+          engine_key: string;
+          engine_version: string;
+          version: number;
+          effective_from: string | null;
+          effective_to: string | null;
+          published_at: string | null;
+        }[];
+      };
       administrator_roster_is_provisioned: {
         Args: Record<string, never>;
         Returns: boolean;
@@ -559,6 +699,7 @@ export interface Database {
       record_status: RecordStatus;
       verification_status: VerificationStatus;
       prayer_config_scope: PrayerConfigScope;
+      prayer_calculation_method: PrayerCalculationMethod;
       asr_madhhab: AsrMadhhab;
       high_latitude_rule: HighLatitudeRule;
       ramadan_start_type: RamadanStartType;

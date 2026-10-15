@@ -109,6 +109,9 @@ export default async function NotImplementedSectionPage({
           <Link href="/locations/localities" className={buttonClass("secondary", "sm")}>
             Localities
           </Link>
+          <Link href="/prayer-config" className={buttonClass("secondary", "sm")}>
+            Prayer Configuration
+          </Link>
         </div>
       </SectionCard>
     </>
