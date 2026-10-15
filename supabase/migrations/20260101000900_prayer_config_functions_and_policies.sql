@@ -277,6 +277,10 @@ grant execute on function public.resolve_prayer_config(uuid, uuid, uuid, date) t
 -- `LocationInfo.area` (`BD30`, `BD2015`, `BD20153012`), because that is the shared
 -- join key: the panel's code columns and the app's bundled dataset use the same
 -- p-codes. The app never needs to know a panel UUID.
+-- PostgreSQL cannot change a RETURNS TABLE row shape with CREATE OR REPLACE, so
+-- remove any previous version first; the grants below are then reapplied.
+drop function if exists public.public_prayer_configs();
+
 create or replace function public.public_prayer_configs()
 returns table (
   id                    uuid,

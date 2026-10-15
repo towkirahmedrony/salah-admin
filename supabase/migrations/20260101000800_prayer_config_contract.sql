@@ -173,6 +173,10 @@ begin
     return;
   end if;
 
+  -- The existing public RPC returns prayer_config_scope, so it depends on the
+  -- old enum and must be recreated after the enum swap by migration 0009.
+  execute 'drop function if exists public.public_prayer_configs()';
+
   -- 1. Remove every object that holds a dependency on the old type. Index
   --    predicates and CHECK expressions use literals of it, so they genuinely
   --    block the drop; all are recreated later in this migration.
