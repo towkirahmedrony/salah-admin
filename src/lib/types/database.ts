@@ -352,6 +352,79 @@ export type FeedbackReportRow = {
   updated_at: string;
 }
 
+// --- Reference prices --------------------------------------------------------
+
+/**
+ * The metal categories a reference price can be published for.
+ *
+ * These are the literal strings the Android app parses, and the database
+ * restricts the column to this set with a CHECK constraint. K22 is the app's
+ * default basis for both metals; the others exist so the panel can manage them.
+ */
+export type MetalType = "gold" | "silver";
+
+export type MetalPurity = "K22" | "K21" | "K18" | "TRADITIONAL";
+
+export type MetalPriceCurrency = "BDT";
+
+/**
+ * The review state of a reference price.
+ *
+ * `pending` is a fetched candidate nobody has verified yet, `verified` has been
+ * approved by an administrator, `rejected` has been refused and can never be
+ * published. Deliberately the same three words the Android client understands.
+ */
+export type MetalPriceVerificationStatus = "pending" | "verified" | "rejected";
+
+export type MetalPriceRow = {
+  id: string;
+  metal_type: MetalType;
+  purity: MetalPurity;
+  price_per_gram: number;
+  currency: MetalPriceCurrency;
+  source: string | null;
+  source_url: string | null;
+  override_active: boolean;
+  is_active: boolean;
+  verification_status: MetalPriceVerificationStatus;
+  effective_at: string | null;
+  provider_last_update: string | null;
+  fetched_at: string | null;
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  sync_log_id: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+export type MetalPriceSyncStatus = "running" | "succeeded" | "partial" | "failed";
+
+/** Outcome for one metal within a run. `skipped` means it was never attempted. */
+export type MetalPriceMetalStatus = "succeeded" | "failed" | "skipped";
+
+export type MetalPriceSyncLogRow = {
+  id: string;
+  provider: string;
+  status: MetalPriceSyncStatus;
+  started_at: string;
+  completed_at: string | null;
+  gold_updated: boolean | null;
+  silver_updated: boolean | null;
+  gold_status: MetalPriceMetalStatus | null;
+  silver_status: MetalPriceMetalStatus | null;
+  gold_candidates: number;
+  silver_candidates: number;
+  pending_candidates: number;
+  rejected_candidates: number;
+  overrides_preserved: number;
+  error_message: string | null;
+  created_at: string;
+  created_by: string | null;
+};
+
 // --- Insert / Update ---------------------------------------------------------
 //
 // Insert types drop the columns the database fills or the trigger stamps, and
@@ -382,6 +455,49 @@ export type RamadanCalendarDayInsert = InsertShape<RamadanCalendarDayRow, "id" |
 export type AppConfigInsert = InsertShape<AppConfigRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "status" | "version" | "published_by" | "published_at">;
 export type AnnouncementInsert = InsertShape<AnnouncementRow, "id" | "created_at" | "updated_at" | "created_by" | "updated_by" | "status" | "version" | "published_by" | "published_at">;
 export type FeedbackReportInsert = InsertShape<FeedbackReportRow, "id" | "created_at" | "updated_at" | "replied_by" | "replied_at" | "admin_reply" | "status" | "assigned_to" | "client_reference" | "diagnostic_metadata" | "app_version" | "android_version" | "device_model" | "app_language" | "contact_email" | "subject">;
+
+export type MetalPriceInsert = InsertShape<
+  MetalPriceRow,
+  | "id"
+  | "currency"
+  | "source"
+  | "source_url"
+  | "override_active"
+  | "is_active"
+  | "verification_status"
+  | "effective_at"
+  | "provider_last_update"
+  | "fetched_at"
+  | "review_note"
+  | "reviewed_by"
+  | "reviewed_at"
+  | "sync_log_id"
+  | "created_at"
+  | "created_by"
+  | "updated_at"
+  | "updated_by"
+>;
+
+export type MetalPriceSyncLogInsert = InsertShape<
+  MetalPriceSyncLogRow,
+  | "id"
+  | "provider"
+  | "status"
+  | "started_at"
+  | "completed_at"
+  | "gold_updated"
+  | "silver_updated"
+  | "gold_status"
+  | "silver_status"
+  | "gold_candidates"
+  | "silver_candidates"
+  | "pending_candidates"
+  | "rejected_candidates"
+  | "overrides_preserved"
+  | "error_message"
+  | "created_at"
+  | "created_by"
+>;
 
 export type TableUpdate<Row> = Partial<Row>;
 
@@ -566,6 +682,32 @@ export interface Database {
           },
         ];
       };
+      /**
+       * Note the asymmetry, which mirrors the policies: `metal_prices` is the
+       * relation the Android app reads (published rows only) *and* the one the
+       * panel manages (all rows), while `metal_price_sync_logs` is
+       * administrator-only and never part of a public contract.
+       */
+      metal_prices: {
+        Row: MetalPriceRow;
+        Insert: MetalPriceInsert;
+        Update: TableUpdate<MetalPriceRow>;
+        Relationships: [
+          {
+            foreignKeyName: "metal_prices_sync_log_id_fkey";
+            columns: ["sync_log_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_price_sync_logs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      metal_price_sync_logs: {
+        Row: MetalPriceSyncLogRow;
+        Insert: MetalPriceSyncLogInsert;
+        Update: TableUpdate<MetalPriceSyncLogRow>;
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -693,6 +835,83 @@ export interface Database {
       is_active_admin: { Args: Record<string, never>; Returns: boolean };
       current_admin_role: { Args: Record<string, never>; Returns: AdminRole | null };
       can_admin: { Args: { p_capability: string }; Returns: boolean };
+
+      /**
+       * The freshness policy, read from the database rather than a copy in the
+       * app, so the panel and the publication guard cannot disagree about when a
+       * candidate is stale.
+       */
+      metal_price_freshness_policy: {
+        Args: Record<string, never>;
+        Returns: {
+          max_candidate_age_hours: number;
+          max_published_age_hours: number;
+          max_future_skew_minutes: number;
+        }[];
+      };
+      /**
+       * `p_price_per_gram` is typed `string` on purpose. A JSON number would be
+       * parsed as a double before it reached PostgreSQL; the provider's literal
+       * digits are what must be stored.
+       */
+      record_metal_price_candidate: {
+        Args: {
+          p_sync_id: string | null;
+          p_metal_type: string;
+          p_purity: string;
+          p_price_per_gram: string;
+          p_currency?: string;
+          p_source?: string | null;
+          p_source_url?: string | null;
+          p_provider_last_update?: string | null;
+          p_fetched_at?: string | null;
+        };
+        Returns: MetalPriceRow;
+      };
+      start_metal_price_sync: {
+        Args: { p_provider?: string };
+        Returns: string;
+      };
+      finish_metal_price_sync: {
+        Args: {
+          p_sync_id: string;
+          p_status: string;
+          p_gold_status?: string | null;
+          p_silver_status?: string | null;
+          p_gold_candidates?: number;
+          p_silver_candidates?: number;
+          p_pending_candidates?: number;
+          p_rejected_candidates?: number;
+          p_overrides_preserved?: number;
+          p_error_message?: string | null;
+        };
+        Returns: MetalPriceSyncLogRow;
+      };
+      publish_metal_price_rate: {
+        Args: { p_id: string; p_effective_at?: string | null; p_acknowledge_stale?: boolean };
+        Returns: MetalPriceRow;
+      };
+      reject_metal_price_candidate: {
+        Args: { p_id: string; p_reason?: string | null };
+        Returns: MetalPriceRow;
+      };
+      create_metal_price_override: {
+        Args: {
+          p_metal_type: string;
+          p_purity: string;
+          p_price_per_gram: string;
+          p_currency?: string;
+          p_source?: string | null;
+          p_source_url?: string | null;
+          p_effective_at?: string | null;
+          p_reason?: string | null;
+        };
+        Returns: MetalPriceRow;
+      };
+      deactivate_metal_price_override: {
+        Args: { p_id: string; p_restore_id?: string | null; p_acknowledge_stale?: boolean };
+        Returns: MetalPriceRow;
+      };
     };
     Enums: {
       admin_role: AdminRole;

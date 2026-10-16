@@ -1,6 +1,7 @@
 import {
   Building2,
   CalendarCheck,
+  Coins,
   Compass,
   Landmark,
   LayoutDashboard,
@@ -32,6 +33,7 @@ const ICONS: Record<string, LucideIcon> = {
   Compass,
   SlidersHorizontal,
   CalendarCheck,
+  Coins,
   Moon,
   Settings2,
   Megaphone,

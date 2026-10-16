@@ -27,6 +27,7 @@ management pages are not.
 | Thanas / Upazilas | Same, plus coordinates and cascading division → district selects |
 | Localities | Same, plus verification status, provenance and explicit parent handling |
 | Prayer configuration | List, create/edit form, version history, publish/archive/delete lifecycle, validation and precedence preview. Drafts, review, effective dates and the public read contract are enforced in SQL. See `docs/PRAYER_CONFIGURATION.md`. |
+| Metal reference prices | Gold and silver reference rates in BDT per gram: current published rates, provider synchronization, candidate review, manual overrides and synchronization history. Fetching stores candidates; only an administrator's explicit approval publishes. See `docs/METAL_PRICES.md`. |
 | Audit history | Schema, triggers, RLS and dashboard summary. **The full log page is not built.** |
 | Setup / configuration states | `/setup` reports exactly which step is outstanding |
 
@@ -255,8 +256,18 @@ working.
 
 ### What the tests cover
 
-73 unit tests over the rules where a silent bug is expensive:
+165 unit tests over the rules where a silent bug is expensive:
 
+- Provider parsing for reference prices: a valid gold and silver document, all four
+  purity categories, another commodity, another currency, another unit, a missing price
+  list, malformed JSON, a price in scientific notation, invalid and future-dated
+  timestamps, zero, negative and non-numeric prices, HTTP errors, timeouts, DNS
+  failures, an oversized response, and gold succeeding while silver fails
+- That reference prices keep their exact digits from the provider's JSON through to the
+  form field, with no floating-point conversion anywhere
+- That a manual price is refused when it is zero, negative, over-precise, or has no
+  recorded reason, and that the freshness policy requires an acknowledgement before a
+  stale candidate can be published
 - The prayer calculation method set, checked against the Android engine's own enum,
   together with the angles the engine ships for each method and the rule that Isha is
   either an angle or an interval and never both
@@ -311,6 +322,21 @@ The panel never invents data.
   constants, written by a trigger so they cannot disagree with what the app will
   actually compute. Offering an editable angle would have produced a configuration
   that looked right and did nothing.
+- Reference prices come from Gold Price Bangladesh, which publishes Bangladesh figures
+  from its own saved BAJUS-based records. The panel does not describe that feed as an
+  official BAJUS API, and it does not call it a live market rate.
+- A provider response is validated field by field, and a price that is missing, zero,
+  negative or not a plain decimal is refused rather than stored as zero. Nothing is
+  published by fetching: a fetched price is a candidate until an administrator
+  approves it, and the panel never marks one verified on its own.
+- The provider's `lastUpdate` is when its JSON was built, not when a price changed. It
+  is stored and displayed as exactly that, and a rate's effective date is only ever
+  filled in by a person who could establish it.
+- An administrator's manual reference price is labelled as an administrative reference
+  price, not a market quote, and it records who set it and why.
+- No market price is hardcoded anywhere, and there is no fallback rate: when nothing
+  verified is published, the rate is reported as unavailable and the Android app falls
+  back to manual price entry.
 - A setting is offered only when the engine reads it. Sunrise and sunset options are
   absent because the provider computes those as raw astronomical events, and
   `locality` scope is absent because the app has no stable identifier for a

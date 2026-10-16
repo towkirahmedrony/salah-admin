@@ -1,6 +1,11 @@
 import type {
   AnnouncementType,
   FeedbackStatus,
+  MetalPriceMetalStatus,
+  MetalPriceSyncStatus,
+  MetalPriceVerificationStatus,
+  MetalPurity,
+  MetalType,
   RecordStatus,
   VerificationStatus,
 } from "@/lib/types/database";
@@ -112,6 +117,69 @@ export const VERIFICATION_STATUS_LABELS: Record<VerificationStatus, string> = {
   rejected: "Rejected",
 };
 
+/**
+ * Reference-price labels.
+ *
+ * `K22` and friends are the provider's own category names and the strings the
+ * Android app matches, so they are shown as they are rather than translated.
+ */
+export const METAL_TYPE_LABELS: Record<MetalType, string> = {
+  gold: "Gold",
+  silver: "Silver",
+};
+
+export const METAL_PURITY_LABELS: Record<MetalPurity, string> = {
+  K22: "K22 (22K)",
+  K21: "K21 (21K)",
+  K18: "K18 (18K)",
+  TRADITIONAL: "Traditional",
+};
+
+export const METAL_PRICE_VERIFICATION_LABELS: Record<MetalPriceVerificationStatus, string> = {
+  pending: "Pending review",
+  verified: "Verified",
+  rejected: "Rejected",
+};
+
+export const METAL_PRICE_SYNC_STATUS_LABELS: Record<MetalPriceSyncStatus, string> = {
+  running: "Running",
+  succeeded: "Succeeded",
+  partial: "Partial",
+  failed: "Failed",
+};
+
+export const METAL_PRICE_METAL_STATUS_LABELS: Record<MetalPriceMetalStatus, string> = {
+  succeeded: "Fetched and validated",
+  failed: "Failed",
+  skipped: "Not attempted",
+};
+
+/** The label the panel uses for one rate: "Gold K22". */
+export function metalRateLabel(metal: MetalType, purity: MetalPurity): string {
+  return `${METAL_TYPE_LABELS[metal]} ${purity}`;
+}
+
+/**
+ * Formats a price held as an exact decimal string.
+ *
+ * Deliberately not `Number(...).toFixed(2)`: the value arrives as the digits the
+ * provider or administrator supplied, and converting it to a double to display
+ * it would be the one place in this feature where a price is rounded twice.
+ */
+export function formatPricePerGram(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const text = typeof value === "number" ? String(value) : value.trim();
+  const match = /^(-?)(\d+)(?:\.(\d*))?$/.exec(text);
+  if (!match) return text;
+
+  const sign = match[1] ?? "";
+  const whole = match[2] ?? "";
+  const fraction = match[3] ?? "";
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const decimals = `${fraction}00`.slice(0, 2);
+  return `${sign}${grouped}.${decimals}`;
+}
+
 export const FEEDBACK_STATUS_LABELS: Record<FeedbackStatus, string> = {
   open: "Open",
   in_progress: "In progress",
@@ -142,6 +210,8 @@ export const ENTITY_TABLE_LABELS: Record<string, string> = {
   announcements: "Announcement",
   feedback_reports: "Feedback report",
   audit_logs: "Audit log",
+  metal_prices: "Metal reference price",
+  metal_price_sync_logs: "Price synchronization",
 };
 
 export function entityTableLabel(table: string): string {

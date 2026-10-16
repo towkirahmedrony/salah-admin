@@ -43,6 +43,7 @@ export const CAPABILITIES = [
   "manage_prayer_config",
   "manage_prayer_timings",
   "manage_ramadan",
+  "manage_metal_prices",
   "manage_app_config",
   "manage_announcements",
   "manage_feedback",
@@ -58,6 +59,7 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   manage_prayer_config: "Manage prayer configuration",
   manage_prayer_timings: "Manage prayer timetables",
   manage_ramadan: "Manage Ramadan calendar",
+  manage_metal_prices: "Manage gold and silver reference prices",
   manage_app_config: "Manage app configuration",
   manage_announcements: "Manage announcements",
   manage_feedback: "Manage feedback",
@@ -71,6 +73,10 @@ const MATRIX: Record<Capability, AdminRole[]> = {
   manage_prayer_config: ["super_admin", "prayer_data_reviewer"],
   manage_prayer_timings: ["super_admin", "prayer_data_reviewer"],
   manage_ramadan: ["super_admin", "prayer_data_reviewer"],
+  // Reference prices decide what every user's Zakat calculation is based on, so
+  // this stays with super admins. Widening it is a deliberate change in two
+  // places: this line and the `metal_prices` branch of `public.can_admin()`.
+  manage_metal_prices: ["super_admin"],
   manage_app_config: ["super_admin", "content_editor"],
   manage_announcements: ["super_admin", "content_editor"],
   manage_feedback: ["super_admin", "support_admin"],
@@ -128,6 +134,12 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/prayer-config", label: "Prayer Configuration", icon: "SlidersHorizontal", capability: "manage_prayer_config" },
       { href: "/prayer-timings", label: "Verified Timetables", icon: "CalendarCheck", capability: "manage_prayer_timings" },
       { href: "/ramadan", label: "Ramadan Calendar", icon: "Moon", capability: "manage_ramadan" },
+    ],
+  },
+  {
+    label: "Zakat",
+    items: [
+      { href: "/metal-prices", label: "Metal Reference Prices", icon: "Coins", capability: "manage_metal_prices" },
     ],
   },
   {
