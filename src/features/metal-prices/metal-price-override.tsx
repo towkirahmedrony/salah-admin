@@ -46,6 +46,7 @@ export function MetalPriceOverride({
 }) {
   const [state, action] = useActionState<MetalPriceActionState, FormData>(
     saveMetalPriceOverride,
+    INITIAL_METAL_PRICE_ACTION_STATE,
   );
   const defaults = newOverrideDefaults(today);
 
@@ -217,6 +218,7 @@ function OverrideRow({
 }) {
   const [state, action] = useActionState<MetalPriceActionState, FormData>(
     deactivateMetalPriceOverride,
+    INITIAL_METAL_PRICE_ACTION_STATE,
   );
   const [restoreId, setRestoreId] = useState("");
   const label = rateLabel(override.metal_type, override.purity);

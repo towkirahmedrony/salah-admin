@@ -65,9 +65,11 @@ export function MetalPriceCandidates({ views, canWrite }: { views: CandidateView
 function CandidateCard({ view, canWrite }: { view: CandidateView; canWrite: boolean }) {
   const [publishState, publishAction] = useActionState<MetalPriceActionState, FormData>(
     publishMetalPriceRate,
+    INITIAL_METAL_PRICE_ACTION_STATE,
   );
   const [rejectState, rejectAction] = useActionState<MetalPriceActionState, FormData>(
     rejectMetalPriceCandidate,
+    INITIAL_METAL_PRICE_ACTION_STATE,
   );
 
   const [acknowledged, setAcknowledged] = useState(false);

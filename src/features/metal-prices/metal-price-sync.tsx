@@ -30,6 +30,7 @@ import { formatPricePerGram } from "@/lib/utils/format";
 export function MetalPriceSync({ canWrite }: { canWrite: boolean }) {
   const [state, action] = useActionState<MetalPriceSyncState, FormData>(
     synchronizeMetalPrices,
+    INITIAL_METAL_PRICE_SYNC_STATE,
   );
 
   if (!canWrite) {
