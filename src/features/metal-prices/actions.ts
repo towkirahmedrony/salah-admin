@@ -40,11 +40,6 @@ export interface MetalPriceActionState {
   fieldErrors?: Record<string, string[]>;
 }
 
-export const INITIAL_METAL_PRICE_ACTION_STATE: MetalPriceActionState = {
-  status: "idle",
-  message: "",
-};
-
 export interface MetalSyncOutcome {
   metal: MetalType;
   status: "succeeded" | "failed" | "skipped";
@@ -68,8 +63,6 @@ export interface MetalPriceSyncState {
     overridesPreserved: number;
   };
 }
-
-export const INITIAL_METAL_PRICE_SYNC_STATE: MetalPriceSyncState = { status: "idle", message: "" };
 
 function revalidateMetalPricePaths(): void {
   revalidatePath("/metal-prices");
@@ -256,7 +249,7 @@ async function storeOutcome(
       recorded,
       rejected,
       notices: read.notices,
-      error: `Nothing usable was stored for ${metal}. ${rejected.map((entry) => `${entry.purity}: ${entry.reason}`).join(" ")}`.trim(),
+      error: `Nothing usable was stored for ${metal}. ${rejected.map((entry) => `${entry.purity}:${entry.reason}`).join(" ")}`.trim(),
     };
   }
 

@@ -9,11 +9,11 @@ import { ConfirmSubmitButton } from "@/components/ui/modal";
 import { SectionCard } from "@/components/ui/page-header";
 import { Alert, EmptyState } from "@/components/ui/states";
 import {
-  INITIAL_METAL_PRICE_ACTION_STATE,
   publishMetalPriceRate,
   rejectMetalPriceCandidate,
   type MetalPriceActionState,
 } from "@/features/metal-prices/actions";
+import { INITIAL_METAL_PRICE_ACTION_STATE } from "@/features/metal-prices/constants";
 import { rateLabel } from "@/features/metal-prices/definitions";
 import type { CandidateView } from "@/features/metal-prices/views";
 import { formatDateTime, formatPricePerGram } from "@/lib/utils/format";
@@ -65,11 +65,9 @@ export function MetalPriceCandidates({ views, canWrite }: { views: CandidateView
 function CandidateCard({ view, canWrite }: { view: CandidateView; canWrite: boolean }) {
   const [publishState, publishAction] = useActionState<MetalPriceActionState, FormData>(
     publishMetalPriceRate,
-    INITIAL_METAL_PRICE_ACTION_STATE,
   );
   const [rejectState, rejectAction] = useActionState<MetalPriceActionState, FormData>(
     rejectMetalPriceCandidate,
-    INITIAL_METAL_PRICE_ACTION_STATE,
   );
 
   const [acknowledged, setAcknowledged] = useState(false);

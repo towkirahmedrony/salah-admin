@@ -9,11 +9,11 @@ import { ConfirmSubmitButton } from "@/components/ui/modal";
 import { SectionCard } from "@/components/ui/page-header";
 import { Alert, EmptyState } from "@/components/ui/states";
 import {
-  INITIAL_METAL_PRICE_ACTION_STATE,
   deactivateMetalPriceOverride,
   saveMetalPriceOverride,
   type MetalPriceActionState,
 } from "@/features/metal-prices/actions";
+import { INITIAL_METAL_PRICE_ACTION_STATE } from "@/features/metal-prices/constants";
 import { METAL_OPTIONS, PURITY_OPTIONS, newOverrideDefaults, rateLabel } from "@/features/metal-prices/definitions";
 import type { SupersededRateView } from "@/features/metal-prices/views";
 import type { MetalPriceRow } from "@/lib/types/database";
@@ -46,7 +46,6 @@ export function MetalPriceOverride({
 }) {
   const [state, action] = useActionState<MetalPriceActionState, FormData>(
     saveMetalPriceOverride,
-    INITIAL_METAL_PRICE_ACTION_STATE,
   );
   const defaults = newOverrideDefaults(today);
 
@@ -218,7 +217,6 @@ function OverrideRow({
 }) {
   const [state, action] = useActionState<MetalPriceActionState, FormData>(
     deactivateMetalPriceOverride,
-    INITIAL_METAL_PRICE_ACTION_STATE,
   );
   const [restoreId, setRestoreId] = useState("");
   const label = rateLabel(override.metal_type, override.purity);

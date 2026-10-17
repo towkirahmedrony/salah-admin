@@ -8,12 +8,11 @@ import { SectionCard } from "@/components/ui/page-header";
 import { Alert } from "@/components/ui/states";
 import { SubmitButton } from "@/components/ui/submit-button";
 import {
-  INITIAL_METAL_PRICE_SYNC_STATE,
   synchronizeMetalPrices,
   type MetalPriceSyncState,
   type MetalSyncOutcome,
 } from "@/features/metal-prices/actions";
-import { PROVIDER_LABEL, PROVIDER_MAX_BYTES, PROVIDER_TIMEOUT_MS } from "@/features/metal-prices/constants";
+import { INITIAL_METAL_PRICE_SYNC_STATE, PROVIDER_LABEL, PROVIDER_MAX_BYTES, PROVIDER_TIMEOUT_MS } from "@/features/metal-prices/constants";
 import { METAL_TYPE_LABELS } from "@/lib/validation/metal-prices";
 import { formatPricePerGram } from "@/lib/utils/format";
 
@@ -31,7 +30,6 @@ import { formatPricePerGram } from "@/lib/utils/format";
 export function MetalPriceSync({ canWrite }: { canWrite: boolean }) {
   const [state, action] = useActionState<MetalPriceSyncState, FormData>(
     synchronizeMetalPrices,
-    INITIAL_METAL_PRICE_SYNC_STATE,
   );
 
   if (!canWrite) {

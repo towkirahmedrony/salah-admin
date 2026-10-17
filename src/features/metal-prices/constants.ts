@@ -1,3 +1,5 @@
+import type { MetalPriceActionState, MetalPriceSyncState } from "@/features/metal-prices/actions";
+
 /**
  * Constants shared by the reference-price screens.
  *
@@ -5,6 +7,16 @@
  * hardcoded anywhere in this feature, by design. A published rate only ever comes
  * from the database, and a candidate only ever comes from the provider.
  */
+
+export const INITIAL_METAL_PRICE_ACTION_STATE: MetalPriceActionState = {
+  status: "idle",
+  message: "",
+};
+
+export const INITIAL_METAL_PRICE_SYNC_STATE: MetalPriceSyncState = {
+  status: "idle",
+  message: "",
+};
 
 /**
  * How many rate rows are read in one page.
